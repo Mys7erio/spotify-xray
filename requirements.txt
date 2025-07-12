@@ -1,0 +1,4 @@
+itsdangerous
+fastapi
+uvicorn
+python-dotenv
