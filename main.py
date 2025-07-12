@@ -80,15 +80,47 @@ def home(request: Request):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to obtain access token")
     
     access_token = response.json().get("access_token", None)
-    if not access_token:
+    refresh_token = response.json().get("refresh_token", None)
+
+    if not access_token or not refresh_token:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Access token not found in response")
     
     request.session['access_token'] = access_token
+    request.session['refresh_token'] = refresh_token
     states.pop(state, None)  # Clean up the state after use
     
 
     return RedirectResponse(url="/")
 
+
+@app.get("/refresh_token")
+def refresh_token(request: Request):
+    refresh_token = request.session.get('refresh_token', None)
+    access_token = request.session.get('access_token', None)
+
+    if not refresh_token or not access_token:
+        return RedirectResponse(url="/authorize")
+
+    data = {
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+    }
+
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": "Basic " + base64.b64encode(f"{CLIENT_ID}:{CLIENT_SECRET}".encode()).decode('utf-8')
+    }
+
+    response = requests.post(SPOTIFY_TOKEN_URL, data=data, headers=headers)
+    if not response.status_code == 200:
+        return {"error": "Failed to refresh token"}
+    
+    new_access_token = response.json().get("access_token", None)
+    if not new_access_token:
+        return {"error": "New access token not found in response"}
+
+    request.session['access_token'] = new_access_token
+    return {"access_token": new_access_token}
 
 
 @app.get("/")
@@ -107,8 +139,8 @@ def current_playing(request: Request):
     elif response.status_code == 200:
         return response.json()
 
-    elif response.status_code == 401:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+    elif access_token and response.status_code == 401:
+        return RedirectResponse(url="/refresh_token")
 
     else:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error fetching data from Spotify")
