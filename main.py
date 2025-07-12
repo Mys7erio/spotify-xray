@@ -3,11 +3,12 @@ import secrets
 import base64
 import requests
 import time
+import redis
 
 from dotenv import load_dotenv
 
 from fastapi import FastAPI, Request, HTTPException, status
-from starlette.middleware.sessions import SessionMiddleware
+# from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import RedirectResponse, HTMLResponse
 from urllib.parse import urlencode
 
@@ -18,7 +19,11 @@ load_dotenv()
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 REDIRECT_URI = os.getenv("REDIRECT_URI")
-SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", secrets.token_urlsafe(32))
+# SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", secrets.token_urlsafe(32))
+
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 
 
 # Spotify API Endpoints - CORRECTED URLs
@@ -30,15 +35,19 @@ SPOTIFY_API_BASE_URL = "https://api.spotify.com/v1"
 
 
 app = FastAPI()
-app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
+# app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
 
-states = {}
+
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, db=0, decode_responses=True)
+
+# states = {}
 
 
 @app.get("/authorize")
 def authorize():
     state = secrets.token_urlsafe(16)
-    states[state] = ''
+    redis_client.set(f"spotify_state:{state}", time.time(), ex=300)
+
     query_params = {
         "response_type": "code",
         "client_id": CLIENT_ID,
@@ -61,8 +70,11 @@ def home(request: Request):
         return RedirectResponse(url="/authorize")
     
     # Verify the state parameter to prevent CSRF attacks
-    if state not in states:
+    if not redis_client.exists(f"spotify_state:{state}"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="State not recognized. Possible CSRF attack detected")
+    
+    # Clean up the state from Redis
+    redis_client.delete(f"spotify_state:{state}")
 
     data = {
         "grant_type": "authorization_code",
@@ -75,6 +87,7 @@ def home(request: Request):
         'Authorization': 'Basic ' + base64.b64encode(f"{CLIENT_ID}:{CLIENT_SECRET}".encode()).decode('utf-8')
     }
 
+    # Getting access token
     response = requests.post(SPOTIFY_TOKEN_URL, data=data, headers=headers)
     if not response.ok:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to obtain access token")
@@ -85,18 +98,21 @@ def home(request: Request):
     if not access_token or not refresh_token:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Access token not found in response")
     
-    request.session['access_token'] = access_token
-    request.session['refresh_token'] = refresh_token
-    states.pop(state, None)  # Clean up the state after use
-    
+    # request.session['access_token'] = access_token
+    # request.session['refresh_token'] = refresh_token
+    # return RedirectResponse(url="/")
 
-    return RedirectResponse(url="/")
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+    }
 
 
 @app.get("/refresh_token")
-def refresh_token(request: Request):
-    refresh_token = request.session.get('refresh_token', None)
-    access_token = request.session.get('access_token', None)
+def refresh_token(refresh_token: str | None = None, access_token: str | None = None):
+    # refresh_token = request.session.get('refresh_token', None)
+    # access_token = request.session.get('access_token', None)
+
 
     if not refresh_token or not access_token:
         return RedirectResponse(url="/authorize")
@@ -119,13 +135,13 @@ def refresh_token(request: Request):
     if not new_access_token:
         return {"error": "New access token not found in response"}
 
-    request.session['access_token'] = new_access_token
+    # request.session['access_token'] = new_access_token
     return {"access_token": new_access_token}
 
 
 @app.get("/")
-def current_playing(request: Request):
-    access_token = request.session.get('access_token', None)
+def current_playing(access_token: str | None = None):
+    # access_token = request.session.get('access_token', None)
     if not access_token:
         return RedirectResponse(url="/authorize")
     
