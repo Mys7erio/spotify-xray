@@ -4,6 +4,7 @@ import json
 import logging
 import secrets
 import time
+from typing import Any, Dict
 
 import redis
 import requests
@@ -134,20 +135,51 @@ def current_playing():
     return {"uptime": time.time() - start_time}
 
 
+def smart_poll(song_info: Dict[str, Any]) -> int:
+    try:
+        if not song_info['is_playing']:
+            return 5
+        
+        # song_name = song_info['item']['name']
+        # album_name = song_info['item']['album']['name']
+        # artists = [artist_info['name'] for artist_info in song_info['item']['artists']]
+        # artist_names = ", ".join(artists)
+        # song_id = song_info['item']['id']
+        song_duration_ms = song_info['item']['duration_ms']
+        song_progress_ms = song_info['progress_ms']
+
+        sleep_duration = (song_duration_ms - song_progress_ms) / 1000
+        return max(5, sleep_duration)  # Ensure at least 5 seconds delay
+
+
+    except Exception as e:
+        logger.error(f"Error in smart_poll: {e}")
+        return 5 # Default poll delay in seconds
+
+
+
 @app.get("/xray")
 async def xray(access_token: str, request: Request):
     async def event_stream():
+        poll_delay = 5
         while True:
             try:
                 song_info = get_current_playing(access_token)
-                response = f"data: {json.dumps(song_info)}\n\n"
+                if not song_info:
+                    yield "event: error\ndata: A Server Side Error Occured\n\n"
+                    await asyncio.sleep(poll_delay)
+                    continue
+
+                poll_delay = smart_poll(song_info)
+                song_info = json.dumps(song_info)
+                response = f"data: {song_info}\n\n"
                 yield response
 
             except Exception as e:
                 yield f"event: error\ndata: {str(e)}\n\n"
-                breakpoint()
+
             finally:
-                await asyncio.sleep(5)
+                await asyncio.sleep(poll_delay)
 
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
