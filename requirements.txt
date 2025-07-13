@@ -1,4 +1,7 @@
 itsdangerous
 fastapi
-uvicorn
+uvicorn[standard]
 python-dotenv
+
+langchain_google_genai
+vertexai
