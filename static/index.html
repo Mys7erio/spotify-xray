@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Song Details</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="main.js"></script>
+</head>
+<body>
+  <!-- Navigation Bar -->
+  <nav>
+    <div class="logo">Spotify XRAY</div>
+    <ul>
+      <!-- <li>Home</li>
+      <li>Explore</li>
+      <li>Your Library</li> -->
+    </ul>
+    <div class="search-container">
+      <input type="text" placeholder="Search">
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main>
+    <h1>Song Details</h1>
+    
+    <!-- Song Info -->
+    <div class="song-info">
+      <div class="details">
+        <p>Now Playing</p>
+        <p id="songTitle"></p>
+        <p id="songArtists"></p>
+      </div>
+      <div class="song-image">
+        <img  id="albumArt" alt="Song Artwork">
+      </div>
+    </div>
+
+    <!-- Artist's Intent Section -->
+    <section>
+      <h2>Artist's Intent</h2>
+      <p id="artistIntent">
+
+      </p>
+    </section>
+
+    <!-- Interesting Facts Section -->
+    <section class="interesting-facts-section">
+      <h2>Interesting Facts</h2>
+      <p id="songFact">
+
+      </p>
+    </section>
+  </main>
+</body>
+</html>

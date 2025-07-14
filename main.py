@@ -10,6 +10,7 @@ import redis
 import requests
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 from spotify import get_current_playing
 from utils import get_artists, get_song_duration, get_song_id, get_song_name, get_song_progress, is_song_playing
@@ -132,9 +133,9 @@ def refresh_token(refresh_token: str | None = None, access_token: str | None = N
     return {"access_token": new_access_token}
 
 
-@app.get("/")
-def current_playing():
-    return {"uptime": time.time() - start_time}
+# @app.get("/")
+# def current_playing():
+#     return {"uptime": time.time() - start_time}
 
 
 def smart_poll(song_info: Dict[str, Any]) -> float:
@@ -177,25 +178,27 @@ async def xray(access_token: str, request: Request):
                     await asyncio.sleep(poll_delay)
                     continue
 
-                poll_delay = smart_poll(song_info)
-
-                song_did_change = await song_changed(access_token, song_info)
-                if song_did_change and is_song_playing(song_info):
-                    song_name = get_song_name(song_info)
-                    artist_names, _ = get_artists(song_info)
-                    song_id = get_song_id(song_info)
-                    # Update Redis with the currently playing song ID
-                    redis_client.set(f"song_id:{access_token}", song_id)
-                    song_xray = get_song_info(song_name, artist_names)
-                else:
-                    song_xray = {}
-
+                song_xray = get_song_info(redis_client, song_info)
                 data = song_info | song_xray
                 response = f"data: {json.dumps(data)}\n\n"
-                
+
+                poll_delay = smart_poll(song_info)
                 yield response
 
+                # song_did_change = await song_changed(access_token, song_info)
+                # if song_did_change and is_song_playing(song_info):
+                # if is_song_playing(song_info):
+                    # song_id = get_song_id(song_info)
+                    # Update Redis with the currently playing song ID
+                    # redis_client.set(f"song_id:{access_token}", song_id)
+                    # song_xray = get_song_info(redis_client, song_info)
+                # else:
+                #     song_xray = {}
+
+
+
             except Exception as e:
+                breakpoint()
                 print(f"Error: {e}")
                 yield f"event: error\ndata: {str(e)}\n\n"
 
@@ -204,3 +207,7 @@ async def xray(access_token: str, request: Request):
 
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+
+app.mount("/", StaticFiles(directory="static", html=True), name="home")
