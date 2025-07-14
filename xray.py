@@ -10,9 +10,7 @@ from vertexai.generative_models import Tool, grounding
 # Load environment variables from a .env file
 load_dotenv()
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

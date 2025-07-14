@@ -12,6 +12,8 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import RedirectResponse, StreamingResponse
 
 from spotify import get_current_playing
+from utils import get_artists, get_song_duration, get_song_id, get_song_name, get_song_progress, is_song_playing
+from xray import get_song_info
 from config import REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, CLIENT_ID, CLIENT_SECRET, REDIRECT_URI, SPOTIFY_AUTH_URL, SPOTIFY_TOKEN_URL
 
 logging.basicConfig(level=logging.INFO)
@@ -135,27 +137,32 @@ def current_playing():
     return {"uptime": time.time() - start_time}
 
 
-def smart_poll(song_info: Dict[str, Any]) -> int:
+def smart_poll(song_info: Dict[str, Any]) -> float:
     try:
-        if not song_info['is_playing']:
+        if not is_song_playing(song_info):
             return 5
         
-        # song_name = song_info['item']['name']
-        # album_name = song_info['item']['album']['name']
-        # artists = [artist_info['name'] for artist_info in song_info['item']['artists']]
-        # artist_names = ", ".join(artists)
-        # song_id = song_info['item']['id']
-        song_duration_ms = song_info['item']['duration_ms']
-        song_progress_ms = song_info['progress_ms']
+        song_duration_ms = get_song_duration(song_info)
+        song_progress_ms = get_song_progress(song_info)
 
-        sleep_duration = (song_duration_ms - song_progress_ms) / 1000
+        sleep_duration = (song_duration_ms - song_progress_ms) / 1000 # Conver to seconds
+        sleep_duration /= 10 # Poll every 10% of the song duration
         return max(5, sleep_duration)  # Ensure at least 5 seconds delay
-
 
     except Exception as e:
         logger.error(f"Error in smart_poll: {e}")
         return 5 # Default poll delay in seconds
 
+
+async def song_changed(access_token: str, song_info: Dict[str, Any]) -> bool:
+    current_song_id = redis_client.get(f"song_id:{access_token}")
+    if current_song_id is None:
+        return True
+    
+    new_song_id = get_song_id(song_info)
+    current_song_id = current_song_id.split(":")[-1]
+
+    return new_song_id != current_song_id
 
 
 @app.get("/xray")
@@ -171,11 +178,25 @@ async def xray(access_token: str, request: Request):
                     continue
 
                 poll_delay = smart_poll(song_info)
-                song_info = json.dumps(song_info)
-                response = f"data: {song_info}\n\n"
+
+                song_did_change = await song_changed(access_token, song_info)
+                if song_did_change and is_song_playing(song_info):
+                    song_name = get_song_name(song_info)
+                    artist_names, _ = get_artists(song_info)
+                    song_id = get_song_id(song_info)
+                    # Update Redis with the currently playing song ID
+                    redis_client.set(f"song_id:{access_token}", song_id)
+                    song_xray = get_song_info(song_name, artist_names)
+                else:
+                    song_xray = {}
+
+                data = song_info | song_xray
+                response = f"data: {json.dumps(data)}\n\n"
+                
                 yield response
 
             except Exception as e:
+                print(f"Error: {e}")
                 yield f"event: error\ndata: {str(e)}\n\n"
 
             finally:

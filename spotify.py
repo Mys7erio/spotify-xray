@@ -1,11 +1,11 @@
-from typing import Dict
+from typing import Any, Dict
 
 import requests
 
 from config import SPOTIFY_API_BASE_URL
 
 
-def get_current_playing(access_token: str) -> Dict[str, str | bool | int]  | None:
+def get_current_playing(access_token: str) -> Dict[str, Any]  | None:
     if not access_token:
         return {"error": "Access code not found", "status_code": 401}
 
