@@ -1,7 +1,7 @@
 import base64
 import secrets
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 from urllib.parse import urlencode
 
 import redis
@@ -36,7 +36,7 @@ def auth_using_spotify(redis_client: redis.Redis) -> str:
 
 def get_access_and_refresh_tokens(
     redis_client: redis.Redis, code: str, state: str
-) -> Dict[str, str]:
+) -> Tuple[str, str]:
     # Verify the state parameter to prevent CSRF attacks
     if not redis_client.exists(f"spotify_state:{state}"):
         raise StateMismatchException("State parameter mismatch. Possible CSRF attack.")
@@ -67,10 +67,7 @@ def get_access_and_refresh_tokens(
     if not access_token or not refresh_token:
         raise InternalServerError("Access token or refresh token not found in response")
 
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-    }
+    return access_token, refresh_token
 
 
 def refresh_access_token(refresh_token: str) -> Dict[str, str]:
@@ -109,5 +106,5 @@ def get_current_playing(access_token: str) -> Dict[str, Any] | None:
         return response.json()
 
     else:
-        response.raise_for_status()
+        return response.json()
 

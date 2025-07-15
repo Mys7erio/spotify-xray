@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login with Spotify</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        main {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #141A1F;
+        }
+
+        main > img {
+            width: 960px;
+            height: 320px;
+            object-fit: cover;
+            border-radius: 2rem;
+        }
+
+        main > h1 {
+            color: white;
+            font-size: 2rem;
+            text-align: center;
+            margin-top: 2rem;
+        }
+
+        .spotify-button {
+            background-color: #1DB954;
+            border: none;
+            padding: 1rem 2rem;
+            font-size: 1.2rem;
+            font-weight: 700;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-top: 1rem;
+        }
+
+
+        @media screen and (max-width: 600px) {
+            main > img {
+                width: 100%;
+                height: auto;
+            }
+            main > h1 {
+                font-size: 1.5rem;
+            }
+            .spotify-button {
+                padding: 0.8rem 1.5rem;
+                font-size: 1rem;
+            }
+            
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <img src="assets/login-page-hero-img.png" alt="Login page hero image">
+        <h1>Unlock the Experience</h1>
+        <p>Log in with your music account to access lyrics, song information, and more.</p>
+
+        <button class="spotify-button" onclick="window.location.href='/authorize'">
+            Login with Spotify
+        </button>
+    </main>
+</body>
+</html>

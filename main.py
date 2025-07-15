@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any, Dict
 
 import redis
 from fastapi import FastAPI, Request
@@ -17,13 +16,11 @@ from spotify import (
     get_current_playing,
     refresh_access_token,
 )
-from utils import get_song_duration, get_song_progress, is_song_playing
+from utils import smart_poll
 from xray import get_song_info
 
 logging.basicConfig(level=GLOBAL_LOG_LEVEL)
 logger = logging.getLogger(__name__)
-
-from urllib.parse import urlencode
 
 app = FastAPI()
 start_time = time.time()
@@ -44,8 +41,8 @@ def authorize():
     return response
 
 
-@app.get("/home")
-def home(request: Request):
+@app.get("/callback")
+def get_tokens(request: Request):
     try:
         code = request.query_params.get("code")
         state = request.query_params.get("state")
@@ -53,7 +50,10 @@ def home(request: Request):
         if not state or not code:
             raise InternalServerError("Missing state or code parameter in request")
 
-        return get_access_and_refresh_tokens(redis_client, code, state)
+        access_token, _ = get_access_and_refresh_tokens(redis_client, code, state)
+        home_page_redirect = RedirectResponse(url="/")
+        home_page_redirect.set_cookie(key="access_token", value=access_token)
+        return home_page_redirect
 
     except Exception as e:
         logger.error(f"Error getting access code: {e}")
@@ -74,39 +74,29 @@ def current_playing():
     return {"uptime": time.time() - start_time}
 
 
-def smart_poll(song_info: Dict[str, Any]) -> float:
-    try:
-        if not is_song_playing(song_info):
-            return 5
-
-        # Song duration and progress in ms
-        song_duration = get_song_duration(song_info)
-        song_progress = get_song_progress(song_info)
-
-        sleep_duration = (song_duration - song_progress) / 1000  # Convert to seconds
-        sleep_duration /= 10  # Poll every 10% of the song duration
-        sleep_duration = max(5, sleep_duration)  # Ensure at least 5 seconds delay
-        logger.info(f"Updated smart poll delay: {sleep_duration}s")
-        return sleep_duration
-
-    except Exception as e:
-        logger.error(f"Error in smart_poll: {e}")
-        return 5  # Default poll delay in seconds
-
-
 @app.get("/xray")
-async def xray(access_token: str): 
-    if not access_token:
-        return {"error": "Access code not found", "status_code": 401}
+async def xray(request: Request): 
+    access_token = request.cookies.get("access_token")
+    print(f"Access Token: {access_token}")
     
     async def event_stream():
         poll_delay = 5
         while True:
+            if not access_token:
+                data = {"error": "Access code not found", "status_code": 401}
+                yield f"event: error\ndata: {json.dumps(data)}\n\n"
+                await asyncio.sleep(poll_delay)
+                continue
             try:
                 song_info = get_current_playing(access_token)
                 logger.debug(f"Current song info: {song_info}")
                 if not song_info:
                     yield "event: error\ndata: A Server Side Error Occured: Empty song_info\n\n"
+                    await asyncio.sleep(poll_delay)
+                    continue
+
+                if not song_info["is_playing"]:
+                    yield f"data: {json.dumps(song_info)}\n\n"
                     await asyncio.sleep(poll_delay)
                     continue
 
