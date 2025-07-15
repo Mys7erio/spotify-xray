@@ -1,0 +1,23 @@
+name: Spotify-XRAY
+
+services:
+  spotify-xray:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: spotify-xray:latest
+    container_name: spotify-xray
+    ports:
+      - "80:80"
+
+    depends_on:
+      - redis
+
+
+  redis:
+    image: redis:8.2-rc1-alpine3.22
+    container_name: redis
+    ports:
+      - "6379:6379"
+    entrypoint: ["redis-server"]
+    command: ["--requirepass", "password"] # WARNING: Change password before running
