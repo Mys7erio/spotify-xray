@@ -2,12 +2,12 @@ import json
 import logging
 from typing import Any, Dict, List
 
+import redis
 from dotenv import load_dotenv
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 from vertexai.generative_models import Tool, grounding
-import redis
 
 from utils import get_artists, get_song_id, get_song_name
 
@@ -20,11 +20,17 @@ logger = logging.getLogger(__name__)
 
 # Define the desired JSON schema for the song information.
 class SongInfo(BaseModel):
-    meaning: str = Field(description="The deep meaning and artist's intent behind the song.")
-    facts: List[str] = Field(description="A list of interesting facts and anecdotes about the song.")
+    meaning: str = Field(
+        description="The deep meaning and artist's intent behind the song."
+    )
+    facts: List[str] = Field(
+        description="A list of interesting facts and anecdotes about the song."
+    )
 
 
-google_search_tool = Tool.from_google_search_retrieval(grounding.GoogleSearchRetrieval())
+google_search_tool = Tool.from_google_search_retrieval(
+    grounding.GoogleSearchRetrieval()
+)
 
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
@@ -51,8 +57,9 @@ prompt = ChatPromptTemplate.from_messages(
 chain = prompt | llm
 
 
-
-def get_song_info(redis_client: redis.Redis, song_info: Dict[str, Any]) -> Dict[str, str | List[str]]:
+def get_song_info(
+    redis_client: redis.Redis, song_info: Dict[str, Any]
+) -> Dict[str, str | List[str]]:
     # logger.info(f"Initializing analysis for '{song_name}' by {artist_name}")
     # Check if the song info is already cached in Redis
     song_name = get_song_name(song_info)
@@ -65,7 +72,7 @@ def get_song_info(redis_client: redis.Redis, song_info: Dict[str, Any]) -> Dict[
     if cached_info:
         logger.info(f"Cache hit for: {song_name} by {artist_name_str}")
         return json.loads(str(cached_info))
-    
+
     logger.info(f"Cache miss for: {song_name} by {artist_name_str}")
 
     # If not cached, invoke the chain to get the song information
