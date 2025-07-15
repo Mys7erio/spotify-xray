@@ -9,7 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from config import REDIS_HOST, REDIS_PASSWORD, REDIS_PORT
+from config import GLOBAL_LOG_LEVEL, REDIS_HOST, REDIS_PASSWORD, REDIS_PORT
 from exceptions import InternalServerError
 from spotify import (
     auth_using_spotify,
@@ -20,7 +20,7 @@ from spotify import (
 from utils import get_song_duration, get_song_progress, is_song_playing
 from xray import get_song_info
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=GLOBAL_LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
 from urllib.parse import urlencode
@@ -111,7 +111,8 @@ async def xray(access_token: str):
                     continue
 
                 song_xray = get_song_info(redis_client, song_info)
-                logger.info(f"Song X-Ray: {song_xray}")
+                logger.info(f"X-Ray Meaning Len: {len(song_xray['meaning'])}")
+                logger.info(f"X-Ray Facts Len: {len(song_xray['facts'])}")
                 data = song_info | song_xray
                 response = f"data: {json.dumps(data)}\n\n"
 

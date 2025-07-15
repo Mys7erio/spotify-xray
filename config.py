@@ -1,8 +1,11 @@
+import logging
 import os
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+GLOBAL_LOG_LEVEL = logging.INFO
 
 # --- Spotify API Configuration ---
 CLIENT_ID = os.getenv("CLIENT_ID")

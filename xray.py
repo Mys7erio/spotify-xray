@@ -9,12 +9,13 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 from vertexai.generative_models import Tool, grounding
 
+from config import GLOBAL_LOG_LEVEL
 from utils import get_artists, get_song_id, get_song_name
 
 # Load environment variables from a .env file
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=GLOBAL_LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
 
