@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import secrets
 import time
 from typing import Any, Dict
 
@@ -62,20 +61,17 @@ def home(request: Request):
 
 
 @app.get("/refresh_token")
-def refresh_token(refresh_token: str, access_token: str):
+def refresh_token(refresh_token: str):
     try:
-        if not refresh_token or not access_token:
-            return RedirectResponse(url="/authorize")
-
         return refresh_access_token(refresh_token)
     except Exception as e:
         logger.error(f"Error refreshing token: {e}")
         return {"error": str(e)}
 
 
-# @app.get("/")
-# def current_playing():
-#     return {"uptime": time.time() - start_time}
+@app.get("/livez")
+def current_playing():
+    return {"uptime": time.time() - start_time}
 
 
 def smart_poll(song_info: Dict[str, Any]) -> float:
@@ -90,6 +86,7 @@ def smart_poll(song_info: Dict[str, Any]) -> float:
         sleep_duration = (song_duration - song_progress) / 1000  # Convert to seconds
         sleep_duration /= 10  # Poll every 10% of the song duration
         sleep_duration = max(5, sleep_duration)  # Ensure at least 5 seconds delay
+        logger.info(f"Updated smart poll delay: {sleep_duration}s")
         return sleep_duration
 
     except Exception as e:
@@ -99,7 +96,6 @@ def smart_poll(song_info: Dict[str, Any]) -> float:
 
 @app.get("/xray")
 async def xray(access_token: str): 
-    print(f"Access Token: {access_token}")   
     if not access_token:
         return {"error": "Access code not found", "status_code": 401}
     
@@ -108,12 +104,14 @@ async def xray(access_token: str):
         while True:
             try:
                 song_info = get_current_playing(access_token)
+                logger.debug(f"Current song info: {song_info}")
                 if not song_info:
                     yield "event: error\ndata: A Server Side Error Occured: Empty song_info\n\n"
                     await asyncio.sleep(poll_delay)
                     continue
 
                 song_xray = get_song_info(redis_client, song_info)
+                logger.info(f"Song X-Ray: {song_xray}")
                 data = song_info | song_xray
                 response = f"data: {json.dumps(data)}\n\n"
 
