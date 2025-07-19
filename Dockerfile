@@ -4,10 +4,11 @@ WORKDIR /src
 
 COPY ./src/requirements.txt .
 
-RUN pip install --no-cache-dir -r requirements.txt
+# Use a cache mount to persist the pip cache directory
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir -r requirements.txt
 
 COPY ./src /src
-COPY .env /src/.env
 
 EXPOSE 80
 ENTRYPOINT ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "80"]

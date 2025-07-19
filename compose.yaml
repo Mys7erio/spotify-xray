@@ -5,10 +5,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: spotify-xray:latest
+    image: 271122/spotify-xray:latest
     container_name: spotify-xray
     ports:
       - "80:80"
+
+    env_file:
+      - .env
 
     depends_on:
       - redis
@@ -21,3 +24,6 @@ services:
       - "6379:6379"
     entrypoint: ["redis-server"]
     command: ["--requirepass", "password"] # WARNING: Change password before running
+
+    env_file:
+      - .env
