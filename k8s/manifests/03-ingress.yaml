@@ -13,6 +13,6 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: spotify-xray
+            name: xray-service
             port:
               number: 80
