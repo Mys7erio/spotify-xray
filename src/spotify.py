@@ -34,6 +34,14 @@ def auth_using_spotify(redis_client: redis.Redis) -> str:
     return redirect_url
 
 
+def get_current_user_uri(access_token: str) -> str:
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    response = requests.get(f"{SPOTIFY_API_BASE_URL}/me", headers=auth_header)
+    user_uri = response.json()['uri']
+
+    return user_uri.split(":")[-1]  # Extract last field (URI) from the uri
+
+
 def get_access_and_refresh_tokens(
     redis_client: redis.Redis, code: str, state: str
 ) -> Tuple[str, str]:
@@ -107,4 +115,6 @@ def get_current_playing(access_token: str) -> Dict[str, Any] | None:
 
     else:
         return response.json()
+
+
 

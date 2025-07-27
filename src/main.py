@@ -14,6 +14,7 @@ from spotify import (
     auth_using_spotify,
     get_access_and_refresh_tokens,
     get_current_playing,
+    get_current_user_uri,
     refresh_access_token,
 )
 from utils import smart_poll
@@ -32,6 +33,11 @@ redis_client = redis.Redis(
     db=0,
     decode_responses=True,
 )
+
+
+@app.get("/livez")
+def livez():
+    return {"uptime": time.time() - start_time}
 
 
 @app.get("/authorize")
@@ -67,11 +73,6 @@ def refresh_token(refresh_token: str):
     except Exception as e:
         logger.error(f"Error refreshing token: {e}")
         return {"error": str(e)}
-
-
-@app.get("/livez")
-def current_playing():
-    return {"uptime": time.time() - start_time}
 
 
 @app.get("/xray")
@@ -120,4 +121,23 @@ async def xray(request: Request):
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
+
+@app.get("/current_user_id")
+def get_user_uri(request: Request):
+    access_token = request.cookies.get("access_token")
+    if not access_token:
+        return {"error": "Access token not found", "status_code": 401}
+
+    try:
+        user_uri = get_current_user_uri(access_token)
+        return {"data": user_uri}
+    except Exception as e:
+        logger.error(str(e))
+        return {"error": str(e)}
+
+
+
 app.mount("/", StaticFiles(directory="static", html=True), name="home")
+
+
+
