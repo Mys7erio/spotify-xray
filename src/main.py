@@ -7,9 +7,10 @@ import redis
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from uuid import uuid4
 
 from config import GLOBAL_LOG_LEVEL, REDIS_HOST, REDIS_PASSWORD, REDIS_PORT
-from exceptions import InternalServerError
+from exceptions import InternalServerError, ExpiredTokenException
 from spotify import (
     auth_using_spotify,
     get_access_and_refresh_tokens,
@@ -17,7 +18,7 @@ from spotify import (
     get_current_user_uri,
     refresh_access_token,
 )
-from utils import smart_poll
+from utils import Dict2EventSourceString, get_access_token, get_refresh_token, smart_poll
 from xray import get_song_info
 
 logging.basicConfig(level=GLOBAL_LOG_LEVEL)
@@ -56,9 +57,15 @@ def get_tokens(request: Request):
         if not state or not code:
             raise InternalServerError("Missing state or code parameter in request")
 
-        access_token, _ = get_access_and_refresh_tokens(redis_client, code, state)
+        access_token, refresh_token = get_access_and_refresh_tokens(redis_client, code, state)
+        session_id = uuid4().hex
+
+        redis_client.set(f"access_token:{session_id}", access_token, ex=60 * 60)  # Store access token for 60 minutes
+        redis_client.set(f"refresh_token:{session_id}", refresh_token, ex=30 * 24 * 60 * 60)  # Store refresh token for 30 days
+
         home_page_redirect = RedirectResponse(url="/")
-        home_page_redirect.set_cookie(key="access_token", value=access_token)
+        # home_page_redirect.set_cookie(key="access_token", value=access_token)
+        home_page_redirect.set_cookie(key="SESSIONID", value=session_id)
         return home_page_redirect
 
     except Exception as e:
@@ -67,9 +74,16 @@ def get_tokens(request: Request):
 
 
 @app.get("/refresh_token")
-def refresh_token(refresh_token: str):
+def refresh_token(request: Request):
     try:
-        return refresh_access_token(refresh_token)
+        session_id = request.cookies.get("SESSIONID")
+        result = refresh_access_token(redis_client, session_id)
+
+        if "access_token" in result:
+            return {"result": "success", "message": "Access token refreshed successfully"}
+        else:
+            return {"result": "error", "message": result.get("error", "Failed to refresh access token")}
+
     except Exception as e:
         logger.error(f"Error refreshing token: {e}")
         return {"error": str(e)}
@@ -77,28 +91,40 @@ def refresh_token(refresh_token: str):
 
 @app.get("/xray")
 async def xray(request: Request): 
-    access_token = request.cookies.get("access_token")
-    print(f"Access Token: {access_token}")
-    
     async def event_stream():
-        poll_delay = 5
+        POLL_DELAY = 5
         while True:
-            if not access_token:
-                data = {"error": "Access code not found", "status_code": 401}
-                yield f"event: error\ndata: {json.dumps(data)}\n\n"
-                await asyncio.sleep(poll_delay)
-                continue
             try:
+                session_id = request.cookies.get("SESSIONID")
+                if not session_id:
+                    message = {"status_code": 401, "message": "Session ID not found in cookies"}
+                    yield Dict2EventSourceString("error", message)
+                    continue
+                
+                refresh_token = get_refresh_token(redis_client, session_id)
+                if not refresh_token:
+                    message = {"status_code": 401, "message": "Refresh token not found"}
+                    yield Dict2EventSourceString("error", message)
+                    continue
+
+                access_token = get_access_token(redis_client, session_id)
+                logger.debug(f"Access Token: {access_token}")
+
+                if refresh_token and not access_token:
+                    access_token = refresh_access_token(redis_client, session_id).get("access_token")
+                    continue
+
                 song_info = get_current_playing(access_token)
                 logger.debug(f"Current song info: {song_info}")
                 if not song_info:
-                    yield "event: error\ndata: A Server Side Error Occured: Empty song_info\n\n"
-                    await asyncio.sleep(poll_delay)
+                    message = {"data": "A Server Side Error Occured: Empty song_info"}
+                    yield Dict2EventSourceString("error", message)
+                    await asyncio.sleep(POLL_DELAY)
                     continue
 
                 if not song_info["is_playing"]:
                     yield f"data: {json.dumps(song_info)}\n\n"
-                    await asyncio.sleep(poll_delay)
+                    await asyncio.sleep(POLL_DELAY) 
                     continue
 
                 song_xray = get_song_info(redis_client, song_info)
@@ -108,15 +134,24 @@ async def xray(request: Request):
                 response = f"data: {json.dumps(data)}\n\n"
 
                 # Update poll delay based on song progress, if everything is fine
-                poll_delay = smart_poll(song_info)
+                POLL_DELAY = smart_poll(song_info)
                 yield response
+
+            except ExpiredTokenException:
+                logger.warning("Access token expired, attempting to refresh")
+                refresh_token = get_refresh_token(redis_client, str(session_id))
+                response = refresh_access_token(redis_client, str(refresh_token))
+
+                if "access_token" in response:
+                    access_token = response["access_token"]
+                    redis_client.set(f"access_token:{session_id}", access_token, ex=60 * 60)
 
             except Exception as e:
                 logger.error(f"An Unknown Error Occurred: {str(e)}")
                 yield f"event: error\ndata: {str(e)}\n\n"
 
             finally:
-                await asyncio.sleep(poll_delay)
+                await asyncio.sleep(POLL_DELAY)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -124,7 +159,9 @@ async def xray(request: Request):
 
 @app.get("/current_user_id")
 def get_user_uri(request: Request):
-    access_token = request.cookies.get("access_token")
+    # access_token = request.cookies.get("access_token")
+    session_id = request.cookies.get("SESSIONID")
+    access_token = get_access_token(redis_client, session_id)
     if not access_token:
         return {"error": "Access token not found", "status_code": 401}
 

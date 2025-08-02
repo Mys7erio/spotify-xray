@@ -2,6 +2,12 @@ const FACT_SLIDESHOW_INTERVAL = 8000; // 8 seconds
 
 
 window.onload = function() {
+    // Check if the browser has a SESSIONID
+    const sessionId = document.cookie.split('; ').find(row => row.startsWith('SESSIONID='));
+    if (!sessionId) {
+        window.location.href = "/authorize";
+    }
+
     // Connect to the xray endpoint (access_token will be sent via cookie)
     const source = new EventSource("/xray");
 
@@ -9,15 +15,17 @@ window.onload = function() {
     let previousFacts = null; // Track the facts from the previous message
 
     source.onmessage = (event) => {
+        // console.log("SongInfo:", event.data);
+        
         const data = JSON.parse(event.data);
         if (data.is_playing) {
+            console.log("Currently playing:", data.item.name);
             // Update song title, artist, album art, and artist's intent
             document.querySelector("#songTitle").textContent = data.item.name;
             document.querySelector("#albumArt").src = data.item.album.images[0].url;
             document.querySelector("#songArtists").textContent = data.item.artists.map(artist => artist.name).join(", ");
             document.querySelector("#artistIntent").textContent = data.meaning;
         }
-
         const currentFacts = data.facts;
 
         // Only restart the carousel if the facts have changed (e.g., new song)
@@ -32,17 +40,7 @@ window.onload = function() {
     };
 
     source.addEventListener("error", (e) => {
-        error = JSON.parse(e.data);
-        if (error.status_code === 401) {
-            alert("Your session has expired. Please log in using Spotify");
-            window.location.href = "/login.html";
-        } else {
-            console.error(error);
-        }
-        // If access token expires or becomes invalid, redirect to login
-        // if (e.target.readyState === EventSource.CLOSED) {
-        //     window.location.href = "/login.html";
-        // }
+        console.log("Error from EventSource:", Object.keys(e));
     });
 
     function factCarousel(facts) {

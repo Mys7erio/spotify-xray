@@ -1,5 +1,7 @@
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Literal, Tuple
 import logging
+
+import redis
 
 from config import GLOBAL_LOG_LEVEL
 
@@ -38,6 +40,15 @@ def is_song_playing(song_info: Dict[str, Any]) -> bool:
     return song_info["is_playing"]
 
 
+def get_access_token(redis_client: redis.Redis, session_id: str) -> str | None:
+    access_token = redis_client.get(f"access_token:{session_id}")
+    return access_token # type: ignore
+
+
+def get_refresh_token(redis_client: redis.Redis, session_id: str) -> str | None:
+    refresh_token = redis_client.get(f"refresh_token:{session_id}")
+    return refresh_token # type: ignore
+
 
 def smart_poll(song_info: Dict[str, Any]) -> float:
     try:
@@ -57,3 +68,13 @@ def smart_poll(song_info: Dict[str, Any]) -> float:
     except Exception as e:
         logger.error(f"Error in smart_poll: {e}")
         return 5  # Default poll delay in seconds
+
+
+def Dict2EventSourceString(event_type: Literal["data", "error"], data: Dict[str, Any]) -> str:
+    response = ""
+    response += f"event: {event_type}\n"
+    for key, value in data.items():
+        response += f"{key}: {value}\n"
+
+    response += "\n\n"
+    return response
