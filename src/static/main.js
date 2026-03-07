@@ -85,27 +85,43 @@ class ColorExtractor {
       avgBrightness: group.totalBrightness / group.count
     }));
     
-    // Calculate diversity score (how different this color is from others)
-    const totalColors = candidates.length;
+    // Calculate scores for each color group
     candidates.forEach(candidate => {
-      // Frequency score (normalized)
+      // Frequency score (normalized) - how common is this color
       const frequencyScore = candidate.count / samples;
       
-      // Saturation score (prefer colorful, but not exclusively)
-      const saturationScore = candidate.avgSaturation;
+      // Weighted saturation - saturation matters more for brighter colors
+      // Dark colors with "high saturation" are misleading (e.g., rgb(0,0,32))
+      const brightnessFactor = Math.min(1, candidate.avgBrightness / 100); // 0-1 scale, caps at brightness 100
+      const saturationScore = candidate.avgSaturation * brightnessFactor;
       
-      // Brightness preference: slightly favor mid-tones for UI visibility
-      // but still allow dark/bright if they're dominant
-      const brightnessScore = 1 - Math.abs(candidate.avgBrightness - 128) / 128;
+      // Brightness score - prefer mid-to-bright tones that are visible
+      // Use a curve that peaks around 150-180 (good for UI)
+      const optimalBrightness = 160;
+      const brightnessDist = Math.abs(candidate.avgBrightness - optimalBrightness) / 160;
+      const brightnessScore = Math.max(0, 1 - brightnessDist);
       
-      // Combined score: frequency matters most, then saturation, then brightness balance
-      candidate.score = (frequencyScore * 0.6) + (saturationScore * 0.25) + (brightnessScore * 0.15);
+      // Combined score:
+      // - Frequency is most important (50%)
+      // - Brightness balance ensures UI visibility (35%)
+      // - Saturation adds preference for colorful tones, but weighted by brightness (15%)
+      candidate.score = (frequencyScore * 0.50) + (brightnessScore * 0.35) + (saturationScore * 0.15);
     });
     
     // Sort by score and return the best
     candidates.sort((a, b) => b.score - a.score);
     
+    // Debug: Log top candidates
+    console.log('Top 5 color candidates:', candidates.slice(0, 5).map(c => ({
+      rgb: `rgb(${c.r},${c.g},${c.b})`,
+      count: c.count,
+      score: c.score.toFixed(3),
+      saturation: c.avgSaturation.toFixed(3),
+      brightness: c.avgBrightness.toFixed(0)
+    })));
+    
     const best = candidates[0];
+    console.log('Selected color:', `rgb(${best.r},${best.g},${best.b})`);
     
     // Ensure minimum brightness for UI visibility
     const brightness = (best.r + best.g + best.b) / 3;
