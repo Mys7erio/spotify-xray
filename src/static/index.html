@@ -3,55 +3,118 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Song Details</title>
+  <title>Spotify X-Ray</title>
   <link rel="stylesheet" href="styles.css">
   <script src="main.js"></script>
 </head>
 <body>
+  <!-- Dynamic Background -->
+  <div class="ambient-bg">
+    <div class="gradient-orb orb-1"></div>
+    <div class="gradient-orb orb-2"></div>
+    <div class="gradient-orb orb-3"></div>
+  </div>
+
   <!-- Navigation Bar -->
   <nav>
-    <div class="logo">Spotify XRAY</div>
-    <!-- <ul>
-      <li>Home</li>
-      <li>Explore</li>
-      <li>Your Library</li>
-    </ul>
-    <div class="search-container">
-      <input type="text" placeholder="Search">
-    </div> -->
+    <div class="logo">
+      <svg class="logo-icon" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+      </svg>
+      <span>X-Ray</span>
+    </div>
+    <div class="now-playing-indicator">
+      <div class="playing-animation">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <span class="status-text">Ready</span>
+    </div>
   </nav>
 
   <!-- Main Content -->
   <main>
-    <h1>Song Details</h1>
-    
-    <!-- Song Info -->
-    <div class="song-info">
-      <div class="details">
-        <p>Now Playing</p>
-        <p id="songTitle"><i style="color: gray">Play a song to get started...</i></p>
-        <p id="songArtists"></p>
+    <!-- Hero Section with Song Info -->
+    <section class="hero-section">
+      <div class="album-container">
+        <div class="album-art-wrapper">
+          <img id="albumArt" alt="Album Artwork" src="assets/not-found.png">
+          <div class="album-art-glow"></div>
+          <div class="playing-indicator-overlay" id="playingOverlay">
+            <div class="equalizer">
+              <span></span><span></span><span></span><span></span>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="song-image">
-        <img  id="albumArt" alt="Song Artwork" src="assets/not-found.png">
+
+      <div class="song-details">
+        <div class="song-header">
+          <span class="badge">Now Playing</span>
+        </div>
+        <h1 id="songTitle">
+          <span class="placeholder-text">Play a song on Spotify</span>
+        </h1>
+        <p id="songArtists" class="artists">to see the magic happen...</p>
+        
+        <!-- Progress Bar -->
+        <div class="progress-container" id="progressContainer">
+          <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <div class="time-display">
+            <span id="currentTime">0:00</span>
+            <span id="totalTime">0:00</span>
+          </div>
+        </div>
       </div>
+    </section>
+
+    <!-- Analysis Cards Grid -->
+    <div class="analysis-grid">
+      <!-- Artist's Intent Section -->
+      <section class="analysis-card intent-card">
+        <div class="card-header">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+            </svg>
+          </div>
+          <h2>Artist's Intent</h2>
+        </div>
+        <div class="card-content">
+          <p id="artistIntent" class="fade-text">
+            <span class="shimmer-text">Waiting for song analysis...</span>
+          </p>
+        </div>
+        <div class="card-glow"></div>
+      </section>
+
+      <!-- Interesting Facts Section -->
+      <section class="analysis-card facts-card">
+        <div class="card-header">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6A4.997 4.997 0 0 1 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/>
+            </svg>
+          </div>
+          <h2>Did You Know?</h2>
+          <div class="fact-dots" id="factDots"></div>
+        </div>
+        <div class="card-content">
+          <p id="songFact" class="fade-text">
+            <span class="shimmer-text">Interesting facts will appear here</span>
+          </p>
+        </div>
+        <div class="card-glow"></div>
+      </section>
     </div>
-
-    <!-- Artist's Intent Section -->
-    <section>
-      <h2>Artist's Intent</h2>
-      <p id="artistIntent">
-        No info available
-      </p>
-    </section>
-
-    <!-- Interesting Facts Section -->
-    <section style="min-height: 8rem;">
-      <h2>Interesting Facts</h2>
-      <p id="songFact">
-        No facts available
-      </p>
-    </section>
   </main>
+
+  <!-- Footer -->
+  <footer>
+    <p>Powered by <span class="highlight">Spotify</span> & <span class="highlight">Gemini AI</span></p>
+  </footer>
 </body>
 </html>

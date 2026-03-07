@@ -1,67 +1,386 @@
 const FACT_SLIDESHOW_INTERVAL = 8000; // 8 seconds
 
+// Color extraction utility for dynamic theming
+class ColorExtractor {
+  constructor() {
+    this.canvas = document.createElement('canvas');
+    this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+    this.canvas.width = 150;
+    this.canvas.height = 150;
+  }
 
-window.onload = function() {
-    // Check if the browser has a SESSIONID
-    const sessionId = document.cookie.split('; ').find(row => row.startsWith('SESSIONID='));
-    if (!sessionId) {
-        window.location.href = "/authorize";
+  async extractDominantColor(imageUrl) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        this.ctx.drawImage(img, 0, 0, 150, 150);
+        const imageData = this.ctx.getImageData(0, 0, 150, 150).data;
+        const color = this.calculateDominantColor(imageData);
+        resolve(color);
+      };
+      img.onerror = () => resolve({ r: 29, g: 185, b: 84 }); // Default Spotify green
+      img.src = imageUrl;
+    });
+  }
+
+  calculateDominantColor(data) {
+    const colorCounts = {};
+    const samples = 1000; // Sample pixels for performance
+    
+    for (let i = 0; i < samples; i++) {
+      const idx = Math.floor(Math.random() * (data.length / 4)) * 4;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      const a = data[idx + 3];
+      
+      // Skip transparent and very dark/bright pixels
+      if (a < 128 || (r + g + b) < 30 || (r + g + b) > 720) continue;
+      
+      // Quantize colors for better grouping
+      const qr = Math.round(r / 32) * 32;
+      const qg = Math.round(g / 32) * 32;
+      const qb = Math.round(b / 32) * 32;
+      const key = `${qr},${qg},${qb}`;
+      
+      colorCounts[key] = (colorCounts[key] || 0) + 1;
+    }
+    
+    // Find most common color
+    let maxCount = 0;
+    let dominantColor = { r: 29, g: 185, b: 84 };
+    
+    for (const [key, count] of Object.entries(colorCounts)) {
+      if (count > maxCount) {
+        maxCount = count;
+        const [r, g, b] = key.split(',').map(Number);
+        dominantColor = { r, g, b };
+      }
+    }
+    
+    return dominantColor;
+  }
+
+  rgbToHex(r, g, b) {
+    return `#${[r, g, b].map(x => x.toString(16).padStart(2, '0')).join('')}`;
+  }
+}
+
+// Dynamic theme manager
+class ThemeManager {
+  constructor() {
+    this.colorExtractor = new ColorExtractor();
+    this.currentColor = { r: 29, g: 185, b: 84 };
+    this.transitionDuration = 1000;
+  }
+
+  async updateTheme(imageUrl) {
+    try {
+      const color = await this.colorExtractor.extractDominantColor(imageUrl);
+      this.applyColor(color);
+      this.currentColor = color;
+    } catch (error) {
+      console.warn('Failed to extract color:', error);
+    }
+  }
+
+  applyColor(color) {
+    const root = document.documentElement;
+    const { r, g, b } = color;
+    
+    // Adjust color for better visibility (ensure minimum brightness)
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    const minBrightness = 80;
+    
+    let adjustedR = r, adjustedG = g, adjustedB = b;
+    if (brightness < minBrightness) {
+      const factor = minBrightness / brightness;
+      adjustedR = Math.min(255, Math.round(r * factor));
+      adjustedG = Math.min(255, Math.round(g * factor));
+      adjustedB = Math.min(255, Math.round(b * factor));
+    }
+    
+    // Apply CSS variables
+    root.style.setProperty('--dynamic-rgb', `${adjustedR}, ${adjustedG}, ${adjustedB}`);
+    root.style.setProperty('--dynamic-color', `rgb(${adjustedR}, ${adjustedG}, ${adjustedB})`);
+    root.style.setProperty('--glow-color', `rgba(${adjustedR}, ${adjustedG}, ${adjustedB}, 0.3)`);
+    root.style.setProperty('--gradient-start', `rgba(${adjustedR}, ${adjustedG}, ${adjustedB}, 0.15)`);
+  }
+
+  resetTheme() {
+    this.applyColor({ r: 29, g: 185, b: 84 });
+  }
+}
+
+// Progress bar manager
+class ProgressManager {
+  constructor() {
+    this.progressFill = document.getElementById('progressFill');
+    this.currentTimeEl = document.getElementById('currentTime');
+    this.totalTimeEl = document.getElementById('totalTime');
+    this.container = document.getElementById('progressContainer');
+    this.animationId = null;
+    this.lastProgress = 0;
+    this.lastUpdateTime = 0;
+  }
+
+  show() {
+    this.container.classList.add('visible');
+  }
+
+  hide() {
+    this.container.classList.remove('visible');
+  }
+
+  update(progressMs, durationMs) {
+    if (!progressMs || !durationMs) {
+      this.hide();
+      return;
     }
 
-    // Connect to the xray endpoint (access_token will be sent via cookie)
-    const source = new EventSource("/xray");
+    this.show();
+    this.lastProgress = progressMs;
+    this.lastUpdateTime = Date.now();
+    this.duration = durationMs;
 
-    let factIntervalId = null;
-    let previousFacts = null; // Track the facts from the previous message
+    const progress = Math.min((progressMs / durationMs) * 100, 100);
+    this.progressFill.style.width = `${progress}%`;
 
-    source.onmessage = (event) => {
-        // console.log("SongInfo:", event.data);
-        
-        const data = JSON.parse(event.data);
-        if (data.is_playing) {
-            console.log("Currently playing:", data.item.name);
-            // Update song title, artist, album art, and artist's intent
-            document.querySelector("#songTitle").textContent = data.item.name;
-            document.querySelector("#albumArt").src = data.item.album.images[0].url;
-            document.querySelector("#songArtists").textContent = data.item.artists.map(artist => artist.name).join(", ");
-            document.querySelector("#artistIntent").textContent = data.meaning;
-        }
-        const currentFacts = data.facts;
+    this.currentTimeEl.textContent = this.formatTime(progressMs);
+    this.totalTimeEl.textContent = this.formatTime(durationMs);
 
-        // Only restart the carousel if the facts have changed (e.g., new song)
-        const factsChanged = JSON.stringify(currentFacts) !== JSON.stringify(previousFacts);
-        if (factsChanged) {
-            if (factIntervalId) {
-                clearInterval(factIntervalId);
-            }
-            factIntervalId = factCarousel(currentFacts);
-            previousFacts = currentFacts; // Update the tracked facts
-        }
+    // Start smooth animation
+    this.startAnimation();
+  }
+
+  startAnimation() {
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+    }
+
+    const animate = () => {
+      const elapsed = Date.now() - this.lastUpdateTime;
+      const currentProgress = this.lastProgress + elapsed;
+      
+      if (currentProgress < this.duration) {
+        const progress = (currentProgress / this.duration) * 100;
+        this.progressFill.style.width = `${progress}%`;
+        this.currentTimeEl.textContent = this.formatTime(currentProgress);
+        this.animationId = requestAnimationFrame(animate);
+      }
     };
 
-    source.addEventListener("error", (e) => {
-        console.log("Error from EventSource:", Object.keys(e));
-    });
+    this.animationId = requestAnimationFrame(animate);
+  }
 
-    function factCarousel(facts) {
-        const factElement = document.querySelector("#songFact");
-        
-        if (!facts || facts.length === 0) {
-            // factElement.textContent = "No interesting facts available for this song.";
-            return null;
-        }
-
-        let currentFactIndex = 0;
-        
-        // Display the first fact immediately
-        factElement.textContent = facts[currentFactIndex];
-
-        // Start the interval to cycle through the rest of the facts
-        const intervalId = setInterval(() => {
-            currentFactIndex = (currentFactIndex + 1) % facts.length;
-            factElement.textContent = facts[currentFactIndex];
-        }, FACT_SLIDESHOW_INTERVAL); // Change fact every 8 seconds
-
-        return intervalId;
+  stop() {
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+      this.animationId = null;
     }
+  }
+
+  formatTime(ms) {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }
+}
+
+// Main application
+window.onload = function() {
+  // Check session
+  const sessionId = document.cookie.split('; ').find(row => row.startsWith('SESSIONID='));
+  if (!sessionId) {
+    window.location.href = '/authorize';
+    return;
+  }
+
+  // Initialize managers
+  const themeManager = new ThemeManager();
+  const progressManager = new ProgressManager();
+
+  // UI Elements
+  const songTitle = document.getElementById('songTitle');
+  const songArtists = document.getElementById('songArtists');
+  const albumArt = document.getElementById('albumArt');
+  const artistIntent = document.getElementById('artistIntent');
+  const songFact = document.getElementById('songFact');
+  const playingOverlay = document.getElementById('playingOverlay');
+  const nowPlayingIndicator = document.querySelector('.now-playing-indicator');
+  const statusText = document.querySelector('.status-text');
+  const factDots = document.getElementById('factDots');
+
+  // State
+  let factIntervalId = null;
+  let previousFacts = null;
+  let previousSongId = null;
+  let isPlaying = false;
+
+  // Connect to SSE
+  const source = new EventSource('/xray');
+
+  source.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    
+    // Handle playback state
+    if (data.is_playing) {
+      if (!isPlaying) {
+        isPlaying = true;
+        playingOverlay.classList.add('visible');
+        nowPlayingIndicator.classList.add('active');
+        statusText.textContent = 'Playing';
+      }
+
+      // Update song info
+      const currentSongId = data.item.id;
+      const songChanged = currentSongId !== previousSongId;
+
+      if (songChanged) {
+        previousSongId = currentSongId;
+        
+        // Animate content update
+        songTitle.classList.add('content-transition');
+        songArtists.classList.add('content-transition');
+        
+        setTimeout(() => {
+          songTitle.classList.remove('content-transition');
+          songArtists.classList.remove('content-transition');
+        }, 500);
+
+        // Update text content
+        songTitle.textContent = data.item.name;
+        songArtists.textContent = data.item.artists.map(a => a.name).join(', ');
+        
+        // Update album art with crossfade
+        const newImageUrl = data.item.album.images[0]?.url || 'assets/not-found.png';
+        crossfadeImage(albumArt, newImageUrl);
+        
+        // Update theme based on album art
+        themeManager.updateTheme(newImageUrl);
+
+        // Update artist intent with animation
+        updateTextWithAnimation(artistIntent, data.meaning || 'Analysis not available yet...');
+      }
+
+      // Update progress bar
+      progressManager.update(data.progress_ms, data.item.duration_ms);
+
+    } else {
+      if (isPlaying) {
+        isPlaying = false;
+        playingOverlay.classList.remove('visible');
+        nowPlayingIndicator.classList.remove('active');
+        statusText.textContent = 'Paused';
+        progressManager.stop();
+      }
+    }
+
+    // Handle facts (independent of playing state)
+    const currentFacts = data.facts || [];
+    const factsChanged = JSON.stringify(currentFacts) !== JSON.stringify(previousFacts);
+    
+    if (factsChanged) {
+      if (factIntervalId) {
+        clearInterval(factIntervalId);
+      }
+      
+      if (currentFacts.length > 0) {
+        factIntervalId = startFactCarousel(currentFacts);
+        createFactDots(currentFacts.length);
+      } else {
+        songFact.innerHTML = '<span class="shimmer-text">Interesting facts will appear here</span>';
+        factDots.innerHTML = '';
+      }
+      
+      previousFacts = currentFacts;
+    }
+  };
+
+  source.addEventListener('error', (e) => {
+    console.error('EventSource error:', e);
+    statusText.textContent = 'Disconnected';
+    nowPlayingIndicator.classList.remove('active');
+    progressManager.stop();
+  });
+
+  // Crossfade image transition
+  function crossfadeImage(imgElement, newSrc) {
+    if (imgElement.src === newSrc) return;
+    
+    imgElement.style.opacity = '0';
+    imgElement.style.transform = 'scale(0.95)';
+    
+    setTimeout(() => {
+      imgElement.src = newSrc;
+      imgElement.onload = () => {
+        imgElement.style.opacity = '1';
+        imgElement.style.transform = 'scale(1)';
+      };
+    }, 300);
+  }
+
+  // Text update with animation
+  function updateTextWithAnimation(element, newText) {
+    element.style.opacity = '0';
+    element.style.transform = 'translateY(10px)';
+    
+    setTimeout(() => {
+      element.textContent = newText;
+      element.classList.add('fade-text');
+      element.style.opacity = '1';
+      element.style.transform = 'translateY(0)';
+      
+      setTimeout(() => {
+        element.classList.remove('fade-text');
+      }, 600);
+    }, 200);
+  }
+
+  // Create fact indicator dots
+  function createFactDots(count) {
+    factDots.innerHTML = '';
+    for (let i = 0; i < count; i++) {
+      const dot = document.createElement('span');
+      dot.className = 'fact-dot' + (i === 0 ? ' active' : '');
+      factDots.appendChild(dot);
+    }
+  }
+
+  // Update active dot
+  function updateActiveDot(index) {
+    const dots = factDots.querySelectorAll('.fact-dot');
+    dots.forEach((dot, i) => {
+      dot.classList.toggle('active', i === index);
+    });
+  }
+
+  // Fact carousel
+  function startFactCarousel(facts) {
+    if (!facts || facts.length === 0) return null;
+
+    let currentIndex = 0;
+    
+    // Display first fact
+    updateTextWithAnimation(songFact, facts[0]);
+    updateActiveDot(0);
+
+    // Start interval
+    const intervalId = setInterval(() => {
+      currentIndex = (currentIndex + 1) % facts.length;
+      updateTextWithAnimation(songFact, facts[currentIndex]);
+      updateActiveDot(currentIndex);
+    }, FACT_SLIDESHOW_INTERVAL);
+
+    return intervalId;
+  }
+
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    progressManager.stop();
+    if (factIntervalId) clearInterval(factIntervalId);
+    source.close();
+  });
 };
