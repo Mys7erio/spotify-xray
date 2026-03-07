@@ -25,9 +25,10 @@ class ColorExtractor {
   }
 
   calculateDominantColor(data) {
-    const colorCounts = {};
-    const samples = 1000; // Sample pixels for performance
+    const colors = [];
+    const samples = 2000;
     
+    // Collect all non-transparent colors (no brightness/saturation filtering)
     for (let i = 0; i < samples; i++) {
       const idx = Math.floor(Math.random() * (data.length / 4)) * 4;
       const r = data[idx];
@@ -35,31 +36,91 @@ class ColorExtractor {
       const b = data[idx + 2];
       const a = data[idx + 3];
       
-      // Skip transparent and very dark/bright pixels
-      if (a < 128 || (r + g + b) < 30 || (r + g + b) > 720) continue;
+      // Only skip transparent pixels
+      if (a < 128) continue;
       
-      // Quantize colors for better grouping
-      const qr = Math.round(r / 32) * 32;
-      const qg = Math.round(g / 32) * 32;
-      const qb = Math.round(b / 32) * 32;
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      const saturation = max === 0 ? 0 : (max - min) / max;
+      const brightness = (r + g + b) / 3;
+      
+      colors.push({ r, g, b, saturation, brightness });
+    }
+    
+    if (colors.length === 0) {
+      return { r: 29, g: 185, b: 84 }; // Default Spotify green
+    }
+    
+    // Quantize and group colors
+    const colorGroups = {};
+    
+    for (const color of colors) {
+      // Use 32-step for finer granularity
+      const qr = Math.round(color.r / 32) * 32;
+      const qg = Math.round(color.g / 32) * 32;
+      const qb = Math.round(color.b / 32) * 32;
       const key = `${qr},${qg},${qb}`;
       
-      colorCounts[key] = (colorCounts[key] || 0) + 1;
-    }
-    
-    // Find most common color
-    let maxCount = 0;
-    let dominantColor = { r: 29, g: 185, b: 84 };
-    
-    for (const [key, count] of Object.entries(colorCounts)) {
-      if (count > maxCount) {
-        maxCount = count;
-        const [r, g, b] = key.split(',').map(Number);
-        dominantColor = { r, g, b };
+      if (!colorGroups[key]) {
+        colorGroups[key] = { 
+          r: qr, g: qg, b: qb, 
+          count: 0, 
+          totalSaturation: 0,
+          totalBrightness: 0
+        };
       }
+      
+      colorGroups[key].count++;
+      colorGroups[key].totalSaturation += color.saturation;
+      colorGroups[key].totalBrightness += color.brightness;
     }
     
-    return dominantColor;
+    // Calculate average values for each group
+    const candidates = Object.values(colorGroups).map(group => ({
+      r: group.r,
+      g: group.g,
+      b: group.b,
+      count: group.count,
+      avgSaturation: group.totalSaturation / group.count,
+      avgBrightness: group.totalBrightness / group.count
+    }));
+    
+    // Calculate diversity score (how different this color is from others)
+    const totalColors = candidates.length;
+    candidates.forEach(candidate => {
+      // Frequency score (normalized)
+      const frequencyScore = candidate.count / samples;
+      
+      // Saturation score (prefer colorful, but not exclusively)
+      const saturationScore = candidate.avgSaturation;
+      
+      // Brightness preference: slightly favor mid-tones for UI visibility
+      // but still allow dark/bright if they're dominant
+      const brightnessScore = 1 - Math.abs(candidate.avgBrightness - 128) / 128;
+      
+      // Combined score: frequency matters most, then saturation, then brightness balance
+      candidate.score = (frequencyScore * 0.6) + (saturationScore * 0.25) + (brightnessScore * 0.15);
+    });
+    
+    // Sort by score and return the best
+    candidates.sort((a, b) => b.score - a.score);
+    
+    const best = candidates[0];
+    
+    // Ensure minimum brightness for UI visibility
+    const brightness = (best.r + best.g + best.b) / 3;
+    const minBrightness = 100; // Ensure progress bar and UI elements are visible
+    
+    if (brightness < minBrightness) {
+      const factor = minBrightness / brightness;
+      return {
+        r: Math.min(255, Math.round(best.r * factor)),
+        g: Math.min(255, Math.round(best.g * factor)),
+        b: Math.min(255, Math.round(best.b * factor))
+      };
+    }
+    
+    return { r: best.r, g: best.g, b: best.b };
   }
 
   rgbToHex(r, g, b) {
@@ -134,11 +195,14 @@ class ProgressManager {
   }
 
   update(progressMs, durationMs) {
+    console.log('ProgressManager.update called:', progressMs, durationMs);
     if (!progressMs || !durationMs) {
+      console.log('Hiding progress bar - missing data');
       this.hide();
       return;
     }
 
+    console.log('Showing progress bar');
     this.show();
     this.lastProgress = progressMs;
     this.lastUpdateTime = Date.now();
@@ -225,6 +289,15 @@ window.onload = function() {
   source.onmessage = (event) => {
     const data = JSON.parse(event.data);
     
+    // Debug logging
+    console.log('SSE data:', {
+      is_playing: data.is_playing,
+      has_item: !!data.item,
+      progress_ms: data.progress_ms,
+      duration_ms: data.item?.duration_ms,
+      song_name: data.item?.name
+    });
+    
     // Handle playback state
     if (data.is_playing) {
       if (!isPlaying) {
@@ -266,6 +339,7 @@ window.onload = function() {
       }
 
       // Update progress bar
+      console.log('Updating progress bar:', data.progress_ms, data.item.duration_ms);
       progressManager.update(data.progress_ms, data.item.duration_ms);
 
     } else {

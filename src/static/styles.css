@@ -389,10 +389,11 @@ main {
 
 .progress-bar {
   height: 6px;
-  background: var(--surface);
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 3px;
   overflow: hidden;
   position: relative;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .progress-fill {
@@ -401,7 +402,21 @@ main {
   border-radius: 3px;
   width: 0%;
   transition: width 0.3s linear;
-  box-shadow: 0 0 10px rgba(var(--dynamic-rgb), 0.5);
+  box-shadow: 
+    0 0 10px rgba(var(--dynamic-rgb), 0.6),
+    0 0 20px rgba(var(--dynamic-rgb), 0.3);
+  position: relative;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 20px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4));
+  border-radius: 0 3px 3px 0;
 }
 
 .time-display {
