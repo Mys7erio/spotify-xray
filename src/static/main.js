@@ -1,13 +1,5 @@
 const FACT_SLIDESHOW_INTERVAL = 8000; // 8 seconds
 
-// Color extraction utility for dynamic theming
-class ColorExtractor {
-  constructor() {
-    this.canvas = document.createElement('canvas');
-    this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
-    this.canvas.width = 150;
-    this.canvas.height = 150;
-  }
 
   async extractDominantColor(imageUrl) {
     return new Promise((resolve) => {
@@ -234,21 +226,32 @@ class ProgressManager {
     this.startAnimation();
   }
 
-  startAnimation() {
-    if (this.animationId) {
-      cancelAnimationFrame(this.animationId);
-    }
+    let factIntervalId = null;
+    let previousFacts = null; // Track the facts from the previous message
 
-    const animate = () => {
-      const elapsed = Date.now() - this.lastUpdateTime;
-      const currentProgress = this.lastProgress + elapsed;
-      
-      if (currentProgress < this.duration) {
-        const progress = (currentProgress / this.duration) * 100;
-        this.progressFill.style.width = `${progress}%`;
-        this.currentTimeEl.textContent = this.formatTime(currentProgress);
-        this.animationId = requestAnimationFrame(animate);
-      }
+    source.onmessage = (event) => {
+        // console.log("SongInfo:", event.data);
+        
+        const data = JSON.parse(event.data);
+        if (data.is_playing) {
+            console.log("Currently playing:", data.item.name);
+            // Update song title, artist, album art, and artist's intent
+            document.querySelector("#songTitle").textContent = data.item.name;
+            document.querySelector("#albumArt").src = data.item.album.images[0].url;
+            document.querySelector("#songArtists").textContent = data.item.artists.map(artist => artist.name).join(", ");
+            document.querySelector("#artistIntent").textContent = data.meaning;
+        }
+        const currentFacts = data.facts;
+
+        // Only restart the carousel if the facts have changed (e.g., new song)
+        const factsChanged = JSON.stringify(currentFacts) !== JSON.stringify(previousFacts);
+        if (factsChanged) {
+            if (factIntervalId) {
+                clearInterval(factIntervalId);
+            }
+            factIntervalId = factCarousel(currentFacts);
+            previousFacts = currentFacts; // Update the tracked facts
+        }
     };
 
     this.animationId = requestAnimationFrame(animate);
@@ -327,28 +330,18 @@ window.onload = function() {
       const currentSongId = data.item.id;
       const songChanged = currentSongId !== previousSongId;
 
-      if (songChanged) {
-        previousSongId = currentSongId;
+    function factCarousel(facts) {
+        const factElement = document.querySelector("#songFact");
         
-        // Animate content update
-        songTitle.classList.add('content-transition');
-        songArtists.classList.add('content-transition');
-        
-        setTimeout(() => {
-          songTitle.classList.remove('content-transition');
-          songArtists.classList.remove('content-transition');
-        }, 500);
+        if (!facts || facts.length === 0) {
+            // factElement.textContent = "No interesting facts available for this song.";
+            return null;
+        }
 
-        // Update text content
-        songTitle.textContent = data.item.name;
-        songArtists.textContent = data.item.artists.map(a => a.name).join(', ');
+        let currentFactIndex = 0;
         
-        // Update album art with crossfade
-        const newImageUrl = data.item.album.images[0]?.url || 'assets/not-found.png';
-        crossfadeImage(albumArt, newImageUrl);
-        
-        // Update theme based on album art
-        themeManager.updateTheme(newImageUrl);
+        // Display the first fact immediately
+        factElement.textContent = facts[currentFactIndex];
 
         // Update artist intent with animation
         updateTextWithAnimation(artistIntent, data.meaning || 'Analysis not available yet...');
@@ -368,109 +361,6 @@ window.onload = function() {
       }
     }
 
-    // Handle facts (independent of playing state)
-    const currentFacts = data.facts || [];
-    const factsChanged = JSON.stringify(currentFacts) !== JSON.stringify(previousFacts);
-    
-    if (factsChanged) {
-      if (factIntervalId) {
-        clearInterval(factIntervalId);
-      }
-      
-      if (currentFacts.length > 0) {
-        factIntervalId = startFactCarousel(currentFacts);
-        createFactDots(currentFacts.length);
-      } else {
-        songFact.innerHTML = '<span class="shimmer-text">Interesting facts will appear here</span>';
-        factDots.innerHTML = '';
-      }
-      
-      previousFacts = currentFacts;
+        return intervalId;
     }
-  };
-
-  source.addEventListener('error', (e) => {
-    console.error('EventSource error:', e);
-    statusText.textContent = 'Disconnected';
-    nowPlayingIndicator.classList.remove('active');
-    progressManager.stop();
-  });
-
-  // Crossfade image transition
-  function crossfadeImage(imgElement, newSrc) {
-    if (imgElement.src === newSrc) return;
-    
-    imgElement.style.opacity = '0';
-    imgElement.style.transform = 'scale(0.95)';
-    
-    setTimeout(() => {
-      imgElement.src = newSrc;
-      imgElement.onload = () => {
-        imgElement.style.opacity = '1';
-        imgElement.style.transform = 'scale(1)';
-      };
-    }, 300);
-  }
-
-  // Text update with animation
-  function updateTextWithAnimation(element, newText) {
-    element.style.opacity = '0';
-    element.style.transform = 'translateY(10px)';
-    
-    setTimeout(() => {
-      element.textContent = newText;
-      element.classList.add('fade-text');
-      element.style.opacity = '1';
-      element.style.transform = 'translateY(0)';
-      
-      setTimeout(() => {
-        element.classList.remove('fade-text');
-      }, 600);
-    }, 200);
-  }
-
-  // Create fact indicator dots
-  function createFactDots(count) {
-    factDots.innerHTML = '';
-    for (let i = 0; i < count; i++) {
-      const dot = document.createElement('span');
-      dot.className = 'fact-dot' + (i === 0 ? ' active' : '');
-      factDots.appendChild(dot);
-    }
-  }
-
-  // Update active dot
-  function updateActiveDot(index) {
-    const dots = factDots.querySelectorAll('.fact-dot');
-    dots.forEach((dot, i) => {
-      dot.classList.toggle('active', i === index);
-    });
-  }
-
-  // Fact carousel
-  function startFactCarousel(facts) {
-    if (!facts || facts.length === 0) return null;
-
-    let currentIndex = 0;
-    
-    // Display first fact
-    updateTextWithAnimation(songFact, facts[0]);
-    updateActiveDot(0);
-
-    // Start interval
-    const intervalId = setInterval(() => {
-      currentIndex = (currentIndex + 1) % facts.length;
-      updateTextWithAnimation(songFact, facts[currentIndex]);
-      updateActiveDot(currentIndex);
-    }, FACT_SLIDESHOW_INTERVAL);
-
-    return intervalId;
-  }
-
-  // Cleanup on page unload
-  window.addEventListener('beforeunload', () => {
-    progressManager.stop();
-    if (factIntervalId) clearInterval(factIntervalId);
-    source.close();
-  });
 };
