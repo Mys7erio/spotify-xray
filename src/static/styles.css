@@ -64,8 +64,209 @@ main h1 {
   margin-bottom: 0.5rem;
 }
 
-/* Song Info */
-.song-info {
+.hero-section:hover {
+  background: var(--surface-hover);
+  border-color: rgba(var(--dynamic-rgb), 0.2);
+}
+
+/* Album Art */
+.album-container {
+  position: relative;
+}
+
+.album-art-wrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 
+    0 25px 50px -12px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+  transition: all 0.5s ease;
+}
+
+.album-art-wrapper:hover {
+  transform: translateY(-4px);
+  box-shadow: 
+    0 30px 60px -12px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(var(--dynamic-rgb), 0.3),
+    0 0 60px rgba(var(--dynamic-rgb), 0.2);
+}
+
+.album-art-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.album-art-wrapper:hover img {
+  transform: scale(1.05);
+}
+
+.album-art-glow {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(var(--dynamic-rgb), 0.2) 0%,
+    transparent 50%,
+    rgba(var(--dynamic-rgb), 0.1) 100%
+  );
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+
+.album-art-wrapper:hover .album-art-glow {
+  opacity: 1;
+}
+
+.playing-indicator-overlay {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  padding: 0.75rem 1rem;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
+}
+
+.playing-indicator-overlay.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.equalizer {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 20px;
+}
+
+.equalizer span {
+  width: 4px;
+  background: var(--accent-primary);
+  border-radius: 2px;
+  animation: playing 0.5s ease-in-out infinite;
+}
+
+.equalizer span:nth-child(1) { height: 8px; animation-delay: 0s; }
+.equalizer span:nth-child(2) { height: 16px; animation-delay: 0.1s; }
+.equalizer span:nth-child(3) { height: 12px; animation-delay: 0.15s; }
+.equalizer span:nth-child(4) { height: 20px; animation-delay: 0.05s; }
+
+@keyframes playing {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.6); }
+}
+
+/* Song Details */
+.song-details {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.song-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.375rem 0.875rem;
+  background: linear-gradient(135deg, rgba(var(--dynamic-rgb), 0.2) 0%, rgba(var(--dynamic-rgb), 0.1) 100%);
+  border: 1px solid rgba(var(--dynamic-rgb), 0.3);
+  border-radius: 100px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--dynamic-color);
+  animation: badgePulse 2s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--dynamic-rgb), 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(var(--dynamic-rgb), 0); }
+}
+
+#songTitle {
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  min-height: 3rem;
+}
+
+.placeholder-text {
+  -webkit-text-fill-color: var(--text-muted);
+}
+
+#songArtists {
+  font-size: 1.25rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+  min-height: 1.5rem;
+}
+
+/* Progress Bar */
+.progress-container {
+  margin-top: 1.5rem;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.5s ease;
+}
+
+.progress-container.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.progress-bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--dynamic-color) 0%, var(--accent-secondary) 100%);
+  border-radius: 3px;
+  width: 0%;
+  transition: width 0.3s linear;
+  box-shadow: 
+    0 0 10px rgba(var(--dynamic-rgb), 0.6),
+    0 0 20px rgba(var(--dynamic-rgb), 0.3);
+  position: relative;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 20px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4));
+  border-radius: 0 3px 3px 0;
+}
+
+.time-display {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
