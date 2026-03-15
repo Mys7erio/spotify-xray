@@ -41,6 +41,8 @@ body {
   line-height: 1.6;
   overflow-x: hidden;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Ambient Background */
@@ -199,6 +201,7 @@ main {
   max-width: 1200px;
   margin: 0 auto;
   padding: 6rem 2rem 2rem;
+  flex: 1;
 }
 
 /* Hero Section */
@@ -594,7 +597,7 @@ footer {
   z-index: 1;
   text-align: center;
   padding: 2rem;
-  margin-top: 2rem;
+  margin-top: auto;
 }
 
 footer p {
@@ -605,6 +608,16 @@ footer p {
 footer .highlight {
   color: var(--text-secondary);
   font-weight: 500;
+}
+
+footer a {
+  color: var(--text-primary);
+  text-decoration: wavy underline;
+  /* text-underline-offset: 4px; */
+}
+
+footer a:hover {
+  text-decoration: underline;
 }
 
 /* Responsive Design */
