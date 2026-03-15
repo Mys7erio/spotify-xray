@@ -1,5 +1,13 @@
 const FACT_SLIDESHOW_INTERVAL = 8000; // 8 seconds
 
+// Color extraction utility for dynamic theming
+class ColorExtractor {
+  constructor() {
+    this.canvas = document.createElement('canvas');
+    this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+    this.canvas.width = 150;
+    this.canvas.height = 150;
+  }
 
   async extractDominantColor(imageUrl) {
     return new Promise((resolve) => {
@@ -216,32 +224,31 @@ class ProgressManager {
     this.lastUpdateTime = Date.now();
     this.duration = durationMs;
 
-    let factIntervalId = null;
-    let previousFacts = null; // Track the facts from the previous message
+    const progress = Math.min((progressMs / durationMs) * 100, 100);
+    this.progressFill.style.width = `${progress}%`;
 
-    source.onmessage = (event) => {
-        // console.log("SongInfo:", event.data);
-        
-        const data = JSON.parse(event.data);
-        if (data.is_playing) {
-            console.log("Currently playing:", data.item.name);
-            // Update song title, artist, album art, and artist's intent
-            document.querySelector("#songTitle").textContent = data.item.name;
-            document.querySelector("#albumArt").src = data.item.album.images[0].url;
-            document.querySelector("#songArtists").textContent = data.item.artists.map(artist => artist.name).join(", ");
-            document.querySelector("#artistIntent").textContent = data.meaning;
-        }
-        const currentFacts = data.facts;
+    this.currentTimeEl.textContent = this.formatTime(progressMs);
+    this.totalTimeEl.textContent = this.formatTime(durationMs);
 
-        // Only restart the carousel if the facts have changed (e.g., new song)
-        const factsChanged = JSON.stringify(currentFacts) !== JSON.stringify(previousFacts);
-        if (factsChanged) {
-            if (factIntervalId) {
-                clearInterval(factIntervalId);
-            }
-            factIntervalId = factCarousel(currentFacts);
-            previousFacts = currentFacts; // Update the tracked facts
-        }
+    // Start smooth animation
+    this.startAnimation();
+  }
+
+  startAnimation() {
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+    }
+
+    const animate = () => {
+      const elapsed = Date.now() - this.lastUpdateTime;
+      const currentProgress = this.lastProgress + elapsed;
+      
+      if (currentProgress < this.duration) {
+        const progress = (currentProgress / this.duration) * 100;
+        this.progressFill.style.width = `${progress}%`;
+        this.currentTimeEl.textContent = this.formatTime(currentProgress);
+        this.animationId = requestAnimationFrame(animate);
+      }
     };
 
     this.animationId = requestAnimationFrame(animate);
@@ -438,26 +445,32 @@ window.onload = function() {
     dots.forEach((dot, i) => {
       dot.classList.toggle('active', i === index);
     });
+  }
 
-    function factCarousel(facts) {
-        const factElement = document.querySelector("#songFact");
-        
-        if (!facts || facts.length === 0) {
-            // factElement.textContent = "No interesting facts available for this song.";
-            return null;
-        }
+  // Fact carousel
+  function startFactCarousel(facts) {
+    if (!facts || facts.length === 0) return null;
 
-        let currentFactIndex = 0;
-        
-        // Display the first fact immediately
-        factElement.textContent = facts[currentFactIndex];
+    let currentIndex = 0;
+    
+    // Display first fact
+    updateTextWithAnimation(songFact, facts[0]);
+    updateActiveDot(0);
 
-        // Start the interval to cycle through the rest of the facts
-        const intervalId = setInterval(() => {
-            currentFactIndex = (currentFactIndex + 1) % facts.length;
-            factElement.textContent = facts[currentFactIndex];
-        }, FACT_SLIDESHOW_INTERVAL); // Change fact every 8 seconds
+    // Start interval
+    const intervalId = setInterval(() => {
+      currentIndex = (currentIndex + 1) % facts.length;
+      updateTextWithAnimation(songFact, facts[currentIndex]);
+      updateActiveDot(currentIndex);
+    }, FACT_SLIDESHOW_INTERVAL);
 
-        return intervalId;
-    }
+    return intervalId;
+  }
+
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    progressManager.stop();
+    if (factIntervalId) clearInterval(factIntervalId);
+    source.close();
+  });
 };
