@@ -6,7 +6,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: localhost # Change to your domain
+  - host: spotify-xray.alvn.xyz
     http:
       paths:
       - path: /
